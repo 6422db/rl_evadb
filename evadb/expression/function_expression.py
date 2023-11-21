@@ -130,8 +130,12 @@ class FunctionExpression(AbstractExpression):
 
             # process outcomes only if output is not empty
             if outcomes.frames.empty is False:
-                outcomes = outcomes.project(self.projection_columns)
-                outcomes.modify_column_alias(self.alias)
+                if "done" in outcomes.frames.columns.values and "reward" in outcomes.frames.columns.values\
+                    and "action" in outcomes.frames.columns.values and "observation" in outcomes.frames.columns.values:
+                    pass
+                else:
+                    outcomes = outcomes.project(self.projection_columns)
+                    outcomes.modify_column_alias(self.alias)
 
         # record the number of function calls
         self._stats.num_calls += len(batch)

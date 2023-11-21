@@ -154,3 +154,8 @@ class PDFColumnName(EvaDBEnum):
     page  # noqa: F821
     paragraph  # noqa: F821
     data  # noqa: F821
+
+class RLEnvColumnName(EvaDBEnum):
+    name
+    action_dim
+    observation_dim

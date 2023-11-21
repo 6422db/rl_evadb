@@ -19,7 +19,7 @@ from evadb.executor.load_csv_executor import LoadCSVExecutor
 from evadb.executor.load_multimedia_executor import LoadMultimediaExecutor
 from evadb.parser.types import FileFormatType
 from evadb.plan_nodes.load_data_plan import LoadDataPlan
-
+from evadb.executor.load_rl_env_executor import LoadRLEnvExecutor
 
 class LoadDataExecutor(AbstractExecutor):
     def __init__(self, db: EvaDBDatabase, node: LoadDataPlan):
@@ -32,7 +32,7 @@ class LoadDataExecutor(AbstractExecutor):
 
         # invoke the appropriate executor
         if self.node.file_options["file_format"] is None:
-            err_msg = "Invalid file format, please use supported file formats: CSV | VIDEO | IMAGE | DOCUMENT | PDF"
+            err_msg = "Invalid file format, please use supported file formats: CSV | VIDEO | IMAGE | DOCUMENT | PDF | RL_ENV"
             raise ExecutorError(err_msg)
         if self.node.file_options["file_format"] in [
             FileFormatType.VIDEO,
@@ -43,6 +43,8 @@ class LoadDataExecutor(AbstractExecutor):
             executor = LoadMultimediaExecutor(self.db, self.node)
         elif self.node.file_options["file_format"] == FileFormatType.CSV:
             executor = LoadCSVExecutor(self.db, self.node)
+        elif self.node.file_options["file_format"] == FileFormatType.RL_ENV:
+            executor = LoadRLEnvExecutor(self.db, self.node)
 
         # for each batch, exec the executor
         for batch in executor.exec():

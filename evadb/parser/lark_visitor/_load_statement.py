@@ -55,6 +55,8 @@ class Load:
             file_format = FileFormatType.DOCUMENT
         elif file_format_string == "PDF":
             file_format = FileFormatType.PDF
+        elif file_format_string == "RL_ENV":
+            file_format = FileFormatType.RL_ENV
 
         return file_format
 

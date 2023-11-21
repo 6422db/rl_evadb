@@ -25,6 +25,16 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 
+import gymnasium as gym
+import tianshou as ts
+import torch
+from tianshou.policy import PPOPolicy
+from tianshou.trainer import onpolicy_trainer
+from tianshou.utils.net.common import ActorCritic
+from tianshou.utils.net.continuous import Critic as conCritic
+from tianshou.utils.net.discrete import Critic as disCritic
+from gymnasium.spaces import Discrete, MultiBinary, MultiDiscrete
+
 from evadb.catalog.catalog_utils import get_metadata_properties
 from evadb.catalog.models.function_catalog import FunctionCatalogEntry
 from evadb.catalog.models.function_io_catalog import FunctionIOCatalogEntry
@@ -38,6 +48,7 @@ from evadb.configuration.constants import (
 from evadb.database import EvaDBDatabase
 from evadb.executor.abstract_executor import AbstractExecutor
 from evadb.functions.decorators.utils import load_io_from_function_decorators
+from evadb.functions.rl_algo import RLNetwork
 from evadb.models.storage.batch import Batch
 from evadb.plan_nodes.create_function_plan import CreateFunctionPlan
 from evadb.third_party.huggingface.create import gen_hf_io_catalog_entries
@@ -215,6 +226,114 @@ class CreateFunctionExecutor(AbstractExecutor):
             io_list,
             self.node.metadata,
             score,
+            train_time,
+        )
+
+    def handle_rl_function(self):
+        """Handle rl functions
+
+        Use DQN/PPO to train models.
+        """
+        assert (
+            len(self.children) == 1
+        ), "Create reinforcement learning function expects 1 child, finds {}.".format(
+            len(self.children)
+        )
+
+        child = self.children[0]
+        for batch in child.exec():
+            for col in batch._frames.columns:
+                if "name" in col:
+                    env_name = batch.frames[col][0]
+
+        train_env = ts.env.DummyVectorEnv([lambda: gym.make(env_name) for _ in range(20)])
+        test_env = ts.env.DummyVectorEnv([lambda: gym.make(env_name) for _ in range(10)])
+
+        algo_name = None
+        for data in self.node.metadata:
+            if data.key == 'algo':
+                algo_name = data.value
+                break
+        
+        net = RLNetwork(env_name=env_name, algo=algo_name)
+        if isinstance(train_env.action_space[0], (Discrete, MultiDiscrete, MultiBinary)):
+            action_type = "discrete"
+        else:
+            action_type = "continuous"
+
+        if algo_name == "PPO":
+            critic = disCritic(net.net) if action_type == "discrete" else conCritic(net.net)
+            actor_critic = ActorCritic(net.model, critic)
+            optim = torch.optim.Adam(actor_critic.parameters(), lr=0.0003)
+            policy = PPOPolicy(net.model, critic, optim, dist_fn=net.dist, action_space=train_env.action_space[0], deterministic_eval=True)
+        elif algo_name == "DQN":
+            optim = torch.optim.Adam(net.model.parameters(), lr=1e-3)
+            policy = ts.policy.DQNPolicy(
+                model=net.model,
+                optim=optim,
+                action_space=train_env.action_space[0],
+                discount_factor=0.9,
+                estimation_step=3,
+                target_update_freq=320
+            )
+        else:
+            raise NotImplementedError
+
+        train_collector = ts.data.Collector(policy, train_env, ts.data.VectorReplayBuffer(20000, len(train_env)), exploration_noise=True)
+        test_collector = ts.data.Collector(policy, test_env, exploration_noise=False)
+
+        if algo_name == "DQN":
+            result = ts.trainer.OffpolicyTrainer(
+                policy=policy,
+                train_collector=train_collector,
+                test_collector=test_collector,
+                max_epoch=1, step_per_epoch=10000, step_per_collect=10,
+                update_per_step=0.1, episode_per_test=100, batch_size=64,
+                train_fn=lambda epoch, env_step: policy.set_eps(0.1),
+                test_fn=lambda epoch, env_step: policy.set_eps(0.05),
+                stop_fn=lambda mean_rewards: mean_rewards >= train_env.spec[0].reward_threshold
+            ).run()
+        elif algo_name == "PPO":
+            result = onpolicy_trainer(
+                policy,
+                train_collector,
+                test_collector,
+                max_epoch=1,
+                step_per_epoch=50000,
+                repeat_per_collect=10,
+                episode_per_test=10,
+                batch_size=256,
+                step_per_collect=2000,
+                stop_fn=lambda mean_reward: mean_reward >= train_env.spec[0].reward_threshold,
+            )
+        else:
+            raise NotImplementedError
+        
+        best_rwd = result['best_reward'] if 'best_reward' in result.keys() else None
+        train_time = result["duration"]
+
+        model_path = os.path.join(
+            self.db.catalog().get_configuration_catalog_value("model_dir"),
+            self.node.name+'_model_state_dict_{}.pth'.format(algo_name),
+        )
+        torch.save(net.model.state_dict(), model_path)
+        self.node.metadata.append(
+            FunctionMetadataCatalogEntry("model_path", model_path)
+        )
+        self.node.metadata.append(
+            FunctionMetadataCatalogEntry("env_name", env_name)
+        )
+
+        impl_path = Path(f"{self.function_dir}/rl_algo.py").absolute().as_posix()
+        io_list = []
+
+        return (
+            self.node.name,
+            impl_path,
+            self.node.function_type,
+            io_list,
+            self.node.metadata,
+            best_rwd,
             train_time,
         )
 
@@ -788,6 +907,16 @@ class CreateFunctionExecutor(AbstractExecutor):
                 io_list,
                 metadata,
             ) = self.handle_forecasting_function()
+        elif string_comparison_case_insensitive(self.node.function_type, "RL"):
+            (
+                name,
+                impl_path,
+                function_type,
+                io_list,
+                metadata,
+                best_score,
+                train_time
+            ) = self.handle_rl_function()
         else:
             (
                 name,

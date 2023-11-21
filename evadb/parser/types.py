@@ -66,6 +66,7 @@ class FileFormatType(EvaDBEnum):
     IMAGE  # noqa: F821
     DOCUMENT  # noqa: F821
     PDF  # noqa: F821
+    RL_ENV # noqa: F821
 
 
 class ShowType(EvaDBEnum):

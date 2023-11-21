@@ -30,6 +30,7 @@ from evadb.catalog.catalog_utils import (
     get_pdf_table_column_definitions,
     get_video_table_column_definitions,
     xform_column_definitions_to_catalog_entries,
+    get_rl_env_table_column_definitions
 )
 from evadb.catalog.models.utils import (
     ColumnCatalogEntry,
@@ -693,6 +694,7 @@ class CatalogManager(object):
             FileFormatType.IMAGE,
             FileFormatType.DOCUMENT,
             FileFormatType.PDF,
+            FileFormatType.RL_ENV
         ], f"Format Type {format_type} is not supported"
 
         if format_type is FileFormatType.VIDEO:
@@ -707,6 +709,9 @@ class CatalogManager(object):
         elif format_type is FileFormatType.PDF:
             columns = get_pdf_table_column_definitions()
             table_type = TableType.PDF_DATA
+        elif format_type is FileFormatType.RL_ENV:
+            columns = get_rl_env_table_column_definitions()
+            table_type = TableType.STRUCTURED_DATA
 
         return self.create_and_insert_table_catalog_entry(
             TableInfo(name), columns, table_type=table_type

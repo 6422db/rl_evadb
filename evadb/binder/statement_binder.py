@@ -106,6 +106,8 @@ class StatementBinder:
                         outputs.append(column)
                     else:
                         inputs.append(column)
+            elif string_comparison_case_insensitive(node.function_type, "RL"):
+                pass
             elif string_comparison_case_insensitive(node.function_type, "forecasting"):
                 # Forecasting models have only one input column which is horizon
                 inputs = [ColumnDefinition("horizon", ColumnType.INTEGER, None, None)]

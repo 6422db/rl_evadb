@@ -24,6 +24,7 @@ from evadb.catalog.catalog_type import (
     PDFColumnName,
     TableType,
     VideoColumnName,
+    RLEnvColumnName
 )
 from evadb.catalog.models.utils import (
     ColumnCatalogEntry,
@@ -148,6 +149,19 @@ def get_pdf_table_column_definitions() -> List[ColumnDefinition]:
             None,
             None,
         ),
+    ]
+    return columns
+
+def get_rl_env_table_column_definitions() -> List[ColumnDefinition]:
+    """
+    name: env name
+    action_dim: dim of action space
+    observation_dim: dim of observation space
+    """
+    columns = [
+        ColumnDefinition(RLEnvColumnName.name.name, ColumnType.TEXT, None, None),
+        ColumnDefinition(RLEnvColumnName.action_dim.name, ColumnType.INTEGER, None, None),
+        ColumnDefinition(RLEnvColumnName.observation_dim.name, ColumnType.INTEGER, None, None),
     ]
     return columns
 
