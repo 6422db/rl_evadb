@@ -40,7 +40,6 @@ class RLNetwork(nn.Module):
         self.env = env_name
 
     def forward(self, obs, state=None, info={}):
-        print(obs)
         assert(obs['name'][0] == self.env)
         return self.collect(gym.make(self.env))    
 

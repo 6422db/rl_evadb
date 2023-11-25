@@ -261,6 +261,10 @@ class CreateFunctionExecutor(AbstractExecutor):
         else:
             action_type = "continuous"
 
+        assert(
+            algo_name != "DQN" or action_type != "continuous"
+        ), "DQN can be only used for discrete action spaces"
+
         if algo_name == "PPO":
             critic = disCritic(net.net) if action_type == "discrete" else conCritic(net.net)
             actor_critic = ActorCritic(net.model, critic)
@@ -287,7 +291,7 @@ class CreateFunctionExecutor(AbstractExecutor):
                 policy=policy,
                 train_collector=train_collector,
                 test_collector=test_collector,
-                max_epoch=1, step_per_epoch=10000, step_per_collect=10,
+                max_epoch=10, step_per_epoch=10000, step_per_collect=10,
                 update_per_step=0.1, episode_per_test=100, batch_size=64,
                 train_fn=lambda epoch, env_step: policy.set_eps(0.1),
                 test_fn=lambda epoch, env_step: policy.set_eps(0.05),
@@ -298,7 +302,7 @@ class CreateFunctionExecutor(AbstractExecutor):
                 policy,
                 train_collector,
                 test_collector,
-                max_epoch=1,
+                max_epoch=10,
                 step_per_epoch=50000,
                 repeat_per_collect=10,
                 episode_per_test=10,
